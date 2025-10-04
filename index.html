@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>🔥 FireFinder AI – Advanced Earth View</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Widgets/widgets.css" rel="stylesheet"/>
+  <style>
+    html, body, #cesiumContainer {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+
+    /* Search Bar Styling */
+    #searchContainer {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      width: 500px;
+    }
+
+    #searchInput {
+      width: 100%;
+      padding: 15px 20px;
+      background: rgba(0, 20, 40, 0.85);
+      border: 2px solid rgba(0, 255, 255, 0.3);
+      border-radius: 30px;
+      color: #00ffff;
+      font-family: 'Courier New', monospace;
+      font-size: 16px;
+      outline: none;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.3), inset 0 0 20px rgba(0, 255, 255, 0.1);
+      transition: all 0.3s ease;
+    }
+
+    #searchInput:focus {
+      border-color: rgba(0, 255, 255, 0.8);
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.6), inset 0 0 20px rgba(0, 255, 255, 0.2);
+    }
+
+    #searchInput::placeholder {
+      color: rgba(0, 255, 255, 0.5);
+    }
+
+    /* Weather Data Panel */
+    #weatherPanel {
+      position: absolute;
+      top: 100px;
+      right: -450px;
+      width: 400px;
+      background: rgba(0, 20, 40, 0.9);
+      border: 2px solid rgba(0, 255, 255, 0.4);
+      border-radius: 15px;
+      padding: 25px;
+      z-index: 900;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 40px rgba(0, 255, 255, 0.4), inset 0 0 30px rgba(0, 100, 150, 0.2);
+      transition: right 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      font-family: 'Courier New', monospace;
+      color: #00ffff;
+    }
+
+    #weatherPanel.active {
+      right: 20px;
+    }
+
+    .weather-title {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      text-align: center;
+      text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+      border-bottom: 2px solid rgba(0, 255, 255, 0.3);
+      padding-bottom: 10px;
+    }
+
+    .weather-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+      animation: fadeInUp 0.5s ease forwards;
+      opacity: 0;
+    }
+
+    .weather-row:nth-child(2) { animation-delay: 0.1s; }
+    .weather-row:nth-child(3) { animation-delay: 0.2s; }
+    .weather-row:nth-child(4) { animation-delay: 0.3s; }
+    .weather-row:nth-child(5) { animation-delay: 0.4s; }
+    .weather-row:nth-child(6) { animation-delay: 0.5s; }
+    .weather-row:nth-child(7) { animation-delay: 0.6s; }
+    .weather-row:nth-child(8) { animation-delay: 0.7s; }
+
+    @keyframes fadeInUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+    }
+
+    .weather-label {
+      color: rgba(0, 255, 255, 0.7);
+      font-size: 14px;
+    }
+
+    .weather-value {
+      color: #00ffff;
+      font-weight: bold;
+      font-size: 16px;
+      text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+    }
+
+    /* Holographic Connection Line */
+    #connectionLine {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 850;
+    }
+
+    /* Loading Indicator */
+    #loadingIndicator {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 20, 40, 0.95);
+      color: #00ffff;
+      padding: 30px 50px;
+      border-radius: 15px;
+      font-family: 'Courier New', monospace;
+      font-size: 18px;
+      z-index: 2000;
+      border: 2px solid rgba(0, 255, 255, 0.5);
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+    }
+
+    /* Fire Status Indicator */
+    #fireStatus {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(0, 20, 40, 0.85);
+      border: 2px solid rgba(255, 100, 0, 0.5);
+      border-radius: 10px;
+      padding: 15px 25px;
+      color: #ff6400;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      z-index: 1000;
+      box-shadow: 0 0 20px rgba(255, 100, 0, 0.4);
+      text-shadow: 0 0 10px rgba(255, 100, 0, 0.6);
+    }
+
+    /* Pulsing animation for fire marker */
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.7;
+        transform: scale(1.2);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="loadingIndicator">🌍 Initializing FireFinder AI...</div>
+
+  <div id="searchContainer">
+    <input type="text" id="searchInput" placeholder="🔍 Search location (e.g., Thoothukudi, Tirunelveli)..." />
+  </div>
+
+  <div id="weatherPanel">
+    <div class="weather-title">📊 LIVE WEATHER DATA</div>
+    <div id="weatherData">
+      <div class="weather-row">
+        <span class="weather-label">🌡️ Temperature:</span>
+        <span class="weather-value" id="temp">--</span>
+      </div>
+      <div class="weather-row">
+        <span class="weather-label">🌡️ Feels Like:</span>
+        <span class="weather-value" id="feelsLike">--</span>
+      </div>
+      <div class="weather-row">
+        <span class="weather-label">💧 Humidity:</span>
+        <span class="weather-value" id="humidity">--</span>
+      </div>
+      <div class="weather-row">
+        <span class="weather-label">🌬️ Wind Speed:</span>
+        <span class="weather-value" id="windSpeed">--</span>
+      </div>
+      <div class="weather-row">
+        <span class="weather-label">🧭 Wind Direction:</span>
+        <span class="weather-value" id="windDir">--</span>
+      </div>
+      <div class="weather-row">
+        <span class="weather-label">🌤️ Conditions:</span>
+        <span class="weather-value" id="conditions">--</span>
+      </div>
+      <div class="weather-row">
+        <span class="weather-label">🔽 Pressure:</span>
+        <span class="weather-value" id="pressure">--</span>
+      </div>
+      <div class="weather-row">
+        <span class="weather-label">👁️ Visibility:</span>
+        <span class="weather-value" id="visibility">--</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="fireStatus">🔥 Fire Detection: Standby</div>
+
+  <canvas id="connectionLine"></canvas>
+  <div id="cesiumContainer"></div>
+
+  <script>
+    const OPENWEATHER_API_KEY = '244e765796f8528fd44070f907ceaad1';
+    
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJkYjU2MDE5NS1iNzAzLTQxZGItOTczMi0xMmMzM2IyZmE4MDUiLCJpZCI6MzE5ODAxLCJpYXQiOjE3NTIwMzM3NjJ9._rtqhGPCFADO73ijLrNXZBgsCg_hHrV-Wnl09SANicQ';
+
+    const viewer = new Cesium.Viewer('cesiumContainer', {
+      timeline: false,
+      animation: false,
+      sceneMode: Cesium.SceneMode.SCENE3D,
+      baseLayerPicker: false,
+      navigationHelpButton: false,
+      homeButton: false,
+      geocoder: false,
+      infoBox: false,
+      selectionIndicator: false
+    });
+
+    viewer.scene.backgroundColor = Cesium.Color.BLACK;
+    document.getElementById('loadingIndicator').style.display = 'none';
+
+    viewer.imageryLayers.addImageryProvider(new Cesium.WebMapServiceImageryProvider({
+      url: 'https://firms.modaps.eosdis.nasa.gov/wms/key/cqEHetdiNoaAwKTaZbouvdNVmcKjDuIV/',
+      layers: 'fires_viirs_snpp_24',
+      parameters: {
+        transparent: true,
+        format: 'image/png'
+      },
+      credit: '🔥 NASA FIRMS'
+    }));
+
+    // Canvas for holographic line
+    const canvas = document.getElementById('connectionLine');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+
+    // Auto-spin logic
+    let lastTime = Date.now();
+    let spinning = true;
+    let idleTimer = null;
+
+    function startSpin() {
+      spinning = true;
+    }
+
+    function stopSpin() {
+      spinning = false;
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(startSpin, 10000);
+    }
+
+    viewer.scene.preRender.addEventListener(() => {
+      if (!spinning) return;
+      const now = Date.now();
+      const dt = now - lastTime;
+      viewer.scene.camera.rotate(Cesium.Cartesian3.UNIT_Z, -0.00005 * dt);
+      lastTime = now;
+    });
+
+    ['mousedown', 'wheel', 'touchstart', 'keydown'].forEach(e =>
+      window.addEventListener(e, stopSpin, { passive: true })
+    );
+
+    // Get wind direction
+    function getWindDirection(deg) {
+      const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+      return dirs[Math.round(deg / 45) % 8];
+    }
+
+    // Fetch weather data
+    async function fetchWeather(lat, lon, locationName) {
+      try {
+        const response = await fetch(
+          `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_API_KEY}&units=metric`
+        );
+        const data = await response.json();
+
+        document.getElementById('temp').textContent = `${Math.round(data.main.temp)}°C`;
+        document.getElementById('feelsLike').textContent = `${Math.round(data.main.feels_like)}°C`;
+        document.getElementById('humidity').textContent = `${data.main.humidity}%`;
+        document.getElementById('windSpeed').textContent = `${Math.round(data.wind.speed * 3.6)} km/h`;
+        document.getElementById('windDir').textContent = getWindDirection(data.wind.deg);
+        document.getElementById('conditions').textContent = data.weather[0].description;
+        document.getElementById('pressure').textContent = `${data.main.pressure} hPa`;
+        document.getElementById('visibility').textContent = `${(data.visibility / 1000).toFixed(1)} km`;
+
+        document.querySelector('.weather-title').textContent = `📊 ${locationName.toUpperCase()}`;
+        document.getElementById('weatherPanel').classList.add('active');
+      } catch (error) {
+        console.error('Weather fetch error:', error);
+        document.getElementById('fireStatus').textContent = '⚠️ Weather data unavailable';
+      }
+    }
+
+    // Draw holographic connection line
+    function drawHolographicLine(startX, startY, endX, endY) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const particles = 50;
+      const time = Date.now() * 0.001;
+
+      for (let i = 0; i < particles; i++) {
+        const t = i / particles;
+        const x = startX + (endX - startX) * t;
+        const y = startY + (endY - startY) * t;
+        
+        const offset = Math.sin(time * 3 + i * 0.3) * 5;
+        const alpha = 0.3 + Math.sin(time * 2 + i * 0.5) * 0.3;
+        
+        ctx.beginPath();
+        ctx.arc(x + offset, y, 2, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`;
+        ctx.fill();
+        
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'rgba(0, 255, 255, 0.8)';
+      }
+
+      // Main line
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = 'rgba(0, 255, 255, 0.6)';
+      ctx.stroke();
+    }
+
+    let animationId;
+    function animateConnection(startX, startY) {
+      const endX = window.innerWidth - 220;
+      const endY = 200;
+      
+      function animate() {
+        drawHolographicLine(startX, startY, endX, endY);
+        animationId = requestAnimationFrame(animate);
+      }
+      
+      if (animationId) cancelAnimationFrame(animationId);
+      animate();
+    }
+
+    // Search functionality
+    document.getElementById('searchInput').addEventListener('keypress', async (e) => {
+      if (e.key === 'Enter') {
+        const query = e.target.value.trim();
+        if (!query) return;
+
+        try {
+          const geoResponse = await fetch(
+            `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=1&appid=${OPENWEATHER_API_KEY}`
+          );
+          const geoData = await geoResponse.json();
+
+          if (geoData.length === 0) {
+            document.getElementById('fireStatus').textContent = '⚠️ Location not found';
+            return;
+          }
+
+          const { lat, lon, name, country } = geoData[0];
+          const locationName = `${name}, ${country}`;
+
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(lon, lat, 1000000),
+            duration: 3,
+            complete: () => {
+              viewer.entities.removeAll();
+              
+              viewer.entities.add({
+                position: Cesium.Cartesian3.fromDegrees(lon, lat),
+                point: {
+                  pixelSize: 15,
+                  color: Cesium.Color.CYAN,
+                  outlineColor: Cesium.Color.WHITE,
+                  outlineWidth: 3
+                }
+              });
+
+              const screenPos = Cesium.SceneTransforms.wgs84ToWindowCoordinates(
+                viewer.scene,
+                Cesium.Cartesian3.fromDegrees(lon, lat)
+              );
+
+              if (screenPos) {
+                animateConnection(screenPos.x, screenPos.y);
+              }
+
+              fetchWeather(lat, lon, locationName);
+              document.getElementById('fireStatus').textContent = `🔥 Monitoring: ${locationName}`;
+            }
+          });
+        } catch (error) {
+          console.error('Search error:', error);
+          document.getElementById('fireStatus').textContent = '⚠️ Search failed';
+        }
+      }
+    });
+
+    // Click handler for manual location selection
+    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    handler.setInputAction((evt) => {
+      const pos = viewer.scene.pickPosition(evt.position);
+      if (!Cesium.defined(pos)) return;
+
+      const carto = Cesium.Cartographic.fromCartesian(pos);
+      const lat = Cesium.Math.toDegrees(carto.latitude);
+      const lon = Cesium.Math.toDegrees(carto.longitude);
+
+      viewer.entities.removeAll();
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+        point: {
+          pixelSize: 15,
+          color: Cesium.Color.RED,
+          outlineColor: Cesium.Color.YELLOW,
+          outlineWidth: 3
+        }
+      });
+
+      const screenPos = Cesium.SceneTransforms.wgs84ToWindowCoordinates(
+        viewer.scene,
+        Cesium.Cartesian3.fromDegrees(lon, lat)
+      );
+
+      if (screenPos) {
+        animateConnection(screenPos.x, screenPos.y);
+      }
+
+      fetchWeather(lat, lon, `Lat: ${lat.toFixed(2)}, Lon: ${lon.toFixed(2)}`);
+      document.getElementById('fireStatus').textContent = '🔥 Analyzing location...';
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  </script>
+</body>
+</html>
